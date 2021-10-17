@@ -45,20 +45,31 @@ async function verifyGame(game) {
     return 400;
 }
 
+const customerSchema = joi.object({
+    name: joi.string().min(1).required(), 
+    phone: joi.string().min(10).max(11).required(), 
+    cpf: joi.string().min(11).max(11).required(), 
+    birthday: joi.string().min(10).max(10).required(),
+});
 async function verifyNewCustomer(customer) {
-    const userSchema = joi.object({
-        name: joi.string().min(1).required(), 
-        phone: joi.string().min(10).max(11).required(), 
-        cpf: joi.string().min(11).max(11).required(), 
-        birthday: joi.string().min(10).max(10).required(),
-    })
-    const validate = userSchema.validate(customer);
+    const validate = customerSchema.validate(customer);
     const isPhoneNumber = Number(customer.phone) !== NaN;
     const isCpf = Number(customer.cpf) !== NaN;
     const isDate = new Date(customer.birthday) !== "Invalid Date" && !isNaN(new Date(customer.birthday));
     const isARepeatedCpf = (await getCustomers()).rows.some(cust => cust.cpf === customer.cpf);
     if(isARepeatedCpf) return 409;
     if(validate.error === undefined && isPhoneNumber && isCpf && isDate) return 201;
+    return 400;
+}
+
+async function verifyUpdateCustomer(customer, id) {
+    const validate = customerSchema.validate(customer);
+    const isPhoneNumber = Number(customer.phone) !== NaN;
+    const isCpf = Number(customer.cpf) !== NaN;
+    const isDate = new Date(customer.birthday) !== "Invalid Date" && !isNaN(new Date(customer.birthday));
+    const isARepeatedCpf = (await getCustomers()).rows.some(cust => cust.cpf === customer.cpf && Number(cust.id) !== Number(id));
+    if(isARepeatedCpf) return 409;
+    if(validate.error === undefined && isPhoneNumber && isCpf && isDate) return 200;
     return 400;
 
 }
@@ -68,7 +79,6 @@ app.get('/categories', (req, res) => {
         res.send(result.rows);
      })
 });
-
 app.post('/categories', (req, res) => {
     const newCategory = req.body.name;
 
@@ -102,7 +112,6 @@ app.get('/games', async (req, res) => {
     })
     res.send(games);
 });
-
 app.post('/games', async (req, res) => {
     const game = req.body;
     const {name, image, stockTotal, categoryId, pricePerDay} = game;
@@ -119,7 +128,7 @@ app.post('/games', async (req, res) => {
     } catch (err) {
         res.sendStatus(err);
     }
-})
+});
 
 app.get('/customers', async (req, res) => {
     try {
@@ -135,7 +144,6 @@ app.get('/customers', async (req, res) => {
         res.sendStatus(400);
     }
 });
-
 app.get('/customers/:id', async (req, res) => {
     const { id } = req.params;
     try {
@@ -148,10 +156,10 @@ app.get('/customers/:id', async (req, res) => {
     } catch {
         res.sendStatus(400);
     }
-})
+});
 app.post('/customers', async (req, res) => {
     const newCustomer = req.body;
-    const {name, phone, cpf, birthday} = newCustomer
+    const {name, phone, cpf, birthday} = newCustomer;
     try {
         const verified = await verifyNewCustomer(newCustomer);
     if(verified !== 201) {
@@ -163,6 +171,27 @@ app.post('/customers', async (req, res) => {
     } catch {
         res.sendStatus(400);
     }
-})
+});
+app.put('/customers/:id', async (req, res) => {
+    const updateCustomer = req.body;
+    const {name, phone, cpf, birthday} = updateCustomer;
+    const { id } = req.params;
+    try {
+        const verified = await verifyUpdateCustomer(updateCustomer, id);
+        if(verified !== 200) {
+            res.sendStatus(verified);
+        }
+        await connection.query(`
+            UPDATE customers 
+                SET name = $1, 
+                    phone = $2, 
+                    cpf = $3, 
+                    birthday = $4 
+                WHERE id = $5`,[name, phone, cpf, birthday, id]);
+        res.sendStatus(200);
+    } catch {
+        res.sendStatus(400);
+    }
+});
 
 app.listen(4000);
