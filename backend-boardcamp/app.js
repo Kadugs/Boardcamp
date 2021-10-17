@@ -19,6 +19,7 @@ const connection = new Pool ({
 const getCategories = () => connection.query('SELECT * FROM categories');
 const getGames = () => connection.query('SELECT * FROM games');
 const getCustomers = () => connection.query('SELECT * FROM customers');
+const getRentals = () => connection.query('SELECT * FROM rentals');
 
 async function verifyGame(game) {
     const categories = await getCategories();
@@ -33,13 +34,13 @@ async function verifyGame(game) {
     }
     const userSchema = joi.object({
         name: joi.string().alphanum().min(1).required(),
-        image: joi.string().required(),
+        image: joi.string().pattern(/(http(s?):)([/|.|\w|\s|-])*.(?:jpg|gif|png)/).required(),
         stockTotal: joi.number().integer().min(1).required(),
         categoryId: joi.number().integer().min(1).required(),
         pricePerDay: joi.number().min(1).required(),
     });
     const validate = userSchema.validate(game);
-    if(validate.error === undefined && (game.image.includes('https://') || game.image.includes('http://') || game.image.includes('.com'))) {
+    if(validate.error === undefined && (game.image.includes('https://') || game.image.includes('http://'))) {
         return 201;
     }
     return 400;
@@ -48,7 +49,7 @@ async function verifyGame(game) {
 const customerSchema = joi.object({
     name: joi.string().min(1).required(), 
     phone: joi.string().min(10).max(11).required(), 
-    cpf: joi.string().min(11).max(11).required(), 
+    cpf: joi.string().min(11).max(11).pattern(/^[0-9]+$/).length(11).required(), 
     birthday: joi.string().min(10).max(10).required(),
 });
 async function verifyNewCustomer(customer) {
@@ -73,7 +74,7 @@ async function verifyUpdateCustomer(customer, id) {
     return 400;
 
 }
-
+//categories
 app.get('/categories', (req, res) => {
     getCategories().then(result => {
         res.send(result.rows);
@@ -97,7 +98,7 @@ app.post('/categories', (req, res) => {
          res.sendStatus(201)
      })
 });
-
+//games
 app.get('/games', async (req, res) => {
     
         const gameList = await getGames();
@@ -129,7 +130,7 @@ app.post('/games', async (req, res) => {
         res.sendStatus(err);
     }
 });
-
+//customers
 app.get('/customers', async (req, res) => {
     try {
         const { cpf } = req.query;
@@ -193,5 +194,28 @@ app.put('/customers/:id', async (req, res) => {
         res.sendStatus(400);
     }
 });
+//rentals
+app.get('/rentals', async (req, res) => {
+    try {
+        const { customersId, gameId } = req.query;
+        if(customersId === undefined && gameId === undefined) {
+            const rentalsList = await getRentals();
+            res.send(rentalsList.rows);
+            return;
+        }
+        if(gameId !== undefined) {
+            const filteredCustomers = await connection.query(`SELECT * FROM customers WHERE "gameId" LIKE '${gameId}%';`);
+            res.send(filteredCustomers.rows);
+            return;
+        }
+        if(customersId !== undefined) {
+            const filteredCustomers = await connection.query(`SELECT * FROM customers WHERE "customerId" LIKE '${customersId}%';`);
+            res.send(filteredCustomers.rows);
+            return;
+        }
+    } catch {
+        res.sendStatus(400);
+    }
+})
 
 app.listen(4000);
