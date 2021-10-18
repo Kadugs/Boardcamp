@@ -305,7 +305,6 @@ app.post('/rentals/:id/return', async (req, res) => {
         }
         await connection.query(`UPDATE rentals SET "returnDate" = $1 WHERE id = $2`, [dayjs().format('YYYY-MM-DD'), id])
         res.sendStatus(200)
-
     } catch {
         res.sendStatus(400);
     }
