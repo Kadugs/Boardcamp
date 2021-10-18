@@ -56,7 +56,8 @@ async function verifyNewCustomer(customer) {
     const validate = customerSchema.validate(customer);
     const isPhoneNumber = Number(customer.phone) !== NaN;
     const isCpf = Number(customer.cpf) !== NaN;
-    const isDate = new Date(customer.birthday) !== "Invalid Date" && !isNaN(new Date(customer.birthday));
+    const birthday = dayjs(customer.birthday).format('YYYY-MM-DD')
+    const isDate = birthday != "Invalid Date" && dayjs(birthday) < dayjs();
     const isARepeatedCpf = (await getCustomers()).rows.some(cust => cust.cpf === customer.cpf);
     if(isARepeatedCpf) return 409;
     if(validate.error === undefined && isPhoneNumber && isCpf && isDate) return 201;
@@ -280,7 +281,34 @@ app.post('/rentals', async (req, res) => {
 })
 
 app.post('/rentals/:id/return', async (req, res) => {
+    try {
+        const {id} = req.params;
+        const rentals = await getRentals();
+        const games = await getGames();
+        const rental = rentals.rows.find(rental => rental.id == id);
+        const gameInfo = games.rows.find(game => game.id == rental.gameId);
+        if(rental === undefined) {
+            res.sendStatus(404);
+            return;
+        }
+        if(rental.returnDate !== null) {
+            res.sendStatus(400);
+            return;
+        }
+        const limitDay = dayjs(rental.rentDate).add(rental.daysRented, 'day');
+        if(dayjs() > dayjs(limitDay)) {
+            const extraDays = Number(dayjs(limitDay).subtract(dayjs()).format('DD')); 
+            const fee = extraDays * Number(gameInfo.pricePerDay);
+            await connection.query(`UPDATE rentals SET "delayFee" = $1 "returnDate" = $1 WHERE id = $2`, [fee, dayjs().format('YYYY-MM-DD'), id])
+            res.sendStatus(200)
+            return;
+        }
+        await connection.query(`UPDATE rentals SET "returnDate" = $1 WHERE id = $2`, [dayjs().format('YYYY-MM-DD'), id])
+        res.sendStatus(200)
 
+    } catch {
+        res.sendStatus(400);
+    }
 })
 
 app.delete('/rentals/:id', async (req, res) => {
